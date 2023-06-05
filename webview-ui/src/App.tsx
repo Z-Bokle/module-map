@@ -2,7 +2,7 @@ import { vscode } from "./utilities/vscode";
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
 import "./App.css";
 import { useCallback, useEffect, useState } from "react";
-import {ESModule} from '../../src/classes/ESModule';
+import { ESModule } from '../../src/classes/ESModule';
 
 function App() {
 
@@ -27,6 +27,7 @@ function App() {
     }, [])
 
   const handleReAnalyse = () => {
+    setModules([])
     vscode.postMessage({
       command: 'analyse'
     })

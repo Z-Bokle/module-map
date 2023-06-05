@@ -17,6 +17,12 @@ declare interface ModuleItem {
    * export时，如果空则为本模块
    */
   source?: string
+  /**
+   * 默认导入
+   * 
+   * 仅适用于import，export default没有对应的Module Item
+   */
+  default?: boolean
 }
 
 export class ESModule extends File {
@@ -24,16 +30,16 @@ export class ESModule extends File {
    * export default
    * 
    */
-  exportDefault: boolean
+  exportDefault: boolean;
   /**
    * export * from xxx
    * 
    * 只有source
    */
-  exportAllModules: ModuleItem[]
+  exportAllModules: ModuleItem[];
   /**
    * 常规export
    */
-  exportedItems: ModuleItem[]
-  imports: ModuleItem[]
+  exportedItems: ModuleItem[];
+  imports: ModuleItem[];
 }
