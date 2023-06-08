@@ -1,8 +1,10 @@
 import { FileType } from "vscode";
 import { ESModule, ModuleItem } from "../classes/ESModule";
 import * as path from 'path';
+import modulePaths from "./modulePaths";
+import * as _ from 'lodash';
 
-// 使用邻接表表示图
+// 使用链表表示图
 /*
   - - - - - - - - -               - - - - - - - - -
  |      | SubNode  |- - Side - ->| SubNode  |      |
@@ -58,9 +60,18 @@ interface Graph {
 function findRelatedModules(module: ESModule, allModules: ESModule[]): ESModule[] {
   const relatedModules: ESModule[] = [];
   for(const item of module.imports) {
-    const absolutePath = path.resolve(module.path ?? '', item.source ?? '');
-    const relatedModule = allModules.find((module) => path.resolve(module.path ?? '') === absolutePath);
-    if(relatedModule) {
+    const absolutePath = path.resolve(module.path ?? '', '..' , item.source ?? '');
+    
+    const possiblePaths = modulePaths(absolutePath);
+
+    const relatedModule = allModules.find((module) => {
+      return possiblePaths.filter(
+        (absolutePath) => absolutePath === path.resolve(module.path ?? '')
+      ).length > 0;
+    });
+
+    // 去重
+    if(relatedModule && !relatedModules.some((existModule) => _.isEqual(existModule, relatedModule))) {
       relatedModules.push(relatedModule);
     }
   }
@@ -70,12 +81,14 @@ function findRelatedModules(module: ESModule, allModules: ESModule[]): ESModule[
 function moduleItemToSubNode(item: ModuleItem, type: 'import' | 'export', node: Node): SubNode {
   if(type === 'import') {
     return {
+      ...item,
       type,
       from: [],
       to: node
     } as ImportSubNode;
   } else {
     return {
+      ...item,
       type,
       from: node,
       to: []
@@ -116,48 +129,94 @@ export function build(modules: Exclude<ESModule[], []>): Graph[] {
 
     function addNode(module: ESModule) {
       const node = moduleToNode(module);
+
+      const existNode = nodes.find(
+        (_node) => _node.path === node.path && _node.name === node.name
+      );
+      if(existNode) {
+        return existNode;
+      }
+
       const relatedModules = findRelatedModules(module, modules);
       nodes.push(node);
+
+      console.log('relatedModules', relatedModules);
+
       relatedModules.forEach((relatedModule) => {
         const relatedNode = addNode(relatedModule);
 
         if(relatedModule.exportDefault) {
           // 如果import是default，则关联本模块
           const subNode = node.importSubNodes.find(
-            (subNode) => 
-              path.resolve(node.path ?? '', subNode.source ?? '') === path.resolve(relatedNode.path ?? '')
-              && subNode.default
-            );
-          const defaultSide = {
-            from: relatedNode,
-            to: subNode as ImportSubNode
-          };
-          relatedNode.exportDefaultSides.push(defaultSide);
-          subNode?.from.push(defaultSide);
-        } else {
-          // 否则查找本模块的相关子模块，关联
-          const subNodes = node.importSubNodes.filter(
-            (subNode) => 
-              path.resolve(node.path ?? '', subNode.source ?? '') === path.resolve(relatedNode.path ?? '')
-            );
-          const relatedSubNodes = relatedNode.exportSubNodes.filter(
-            (relatedSubNode) => 
-              path.resolve(relatedNode.path ?? '', relatedSubNode.source ?? '') === path.resolve(relatedNode.path ?? '')
-              && relatedSubNode.default !== true
-            );
-          subNodes.forEach((subNode) => {
-            const relatedSubNode = relatedSubNodes.find((relatedSubNode) => relatedSubNode.name === subNode.name);
-            if(relatedSubNode) {
+            (subNode) => {
+              const absolutePath = path.resolve(node.path ?? '','..' , subNode.source ?? '');
+              // console.log(absolutePath, path.resolve(relatedNode.path ?? ''));
+              const possiblePaths = modulePaths(absolutePath);
+              return possiblePaths.some(
+                (possiblePath) => possiblePath === path.resolve(relatedNode.path ?? '')
+              ) && subNode.default;
+            }
+          );
+          if(subNode) {
+            const defaultSide = {
+              from: relatedNode,
+              to: subNode as ImportSubNode
+            };
+            relatedNode.exportDefaultSides.push(defaultSide);
+            subNode.from.push(defaultSide);
+          }
+          
+        }
+        
+        // 查找本模块的相关子模块，关联 
+        const subNodes = node.importSubNodes.filter(
+          (subNode) => {
+            if(subNode.default) {
+              // import xxx from 'xxxx'
+              // 这种import default如果有效，会在上面被处理掉
+              return false;
+            }
+            const absolutePath = path.resolve(node.path ?? '', '..', subNode.source ?? '');
+            const possiblePaths = modulePaths(absolutePath);
+            return possiblePaths.some((possiblePath) => possiblePath === path.resolve(relatedNode.path ?? ''));
+          });
+
+        const relatedSubNodes = relatedNode.exportSubNodes.filter((relatedSubNode) => {
+          if(relatedSubNode.default) {
+            return false;
+          }
+          if(!_.isEmpty(relatedSubNode.name) && subNodes.some((subNode) => subNode.name === relatedSubNode.name)) {
+            // 标识符对应
+            return true;
+          }
+          if(!_.isEmpty(relatedSubNode.source)) {
+            // export * as foo from 'bar'
+            // export * from 'foobar'
+            return true;
+          }
+          return false;
+        });
+        
+        subNodes.forEach((subNode) => {
+          const relatedSubNodeList = 
+            _.isEmpty(subNode.name)
+            ? relatedNode.exportSubNodes.filter(
+              (relatedSubNode) => !relatedSubNode.default && (!_.isEmpty(relatedSubNode.name) || !_.isEmpty(relatedSubNode.source))
+            ) // import * as xxx from 'xxxxx'
+            : relatedSubNodes.filter((relatedSubNode) => relatedSubNode.name === subNode.name || !_.isEmpty(relatedSubNode.source));
+
+          if(!_.isEmpty(relatedSubNodeList)) {
+            relatedSubNodeList.forEach((relatedSubNode) => {
               const side: ItemSide = {
                 from: relatedSubNode,
                 to: subNode
               };
+              
               relatedSubNode.to.push(side);
               subNode.from.push(side);
-            }
-          });
-        }
-        
+            });
+          }
+        });
       });
       return node;
     }
@@ -168,6 +227,7 @@ export function build(modules: Exclude<ESModule[], []>): Graph[] {
     addNode(modules[0]);
 
     visitedModulesNum += nodes.length;
+
     graphs.push({
       nodes, entry
     });

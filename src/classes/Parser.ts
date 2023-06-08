@@ -105,9 +105,9 @@ export const parseFile = (file: File) => {
       },
       ExportDeclaration: (path) => {
         const result = parseExport(path);
-        module.exportAllModules.push(...module.exportAllModules);
+        module.exportAllModules.push(...result.exportAllModules);
         module.exportedItems.push(...result.exportedItems);
-        module.exportDefault = result.exportDefault;
+        module.exportDefault = module.exportDefault || result.exportDefault;
       }
     });
   }

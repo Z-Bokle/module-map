@@ -1,4 +1,4 @@
-import { FileType } from 'vscode'
+import { FileType } from 'vscode';
 
 interface FileBaseConfigs {
   /**
@@ -6,7 +6,7 @@ interface FileBaseConfigs {
    */
   name: string
   /**
-   * 相对路径，不含文件/目录名
+   * 路径
    */
   path: string
   type: FileType
@@ -22,29 +22,29 @@ interface DirConfigs extends FileBaseConfigs {
 
 export class FileBase implements Partial<FileBaseConfigs> {
   constructor(config: Partial<FileBaseConfigs>) {
-    this.name = config.name
-    this.path = config.path
-    this.type = config.type
+    this.name = config.name;
+    this.path = config.path;
+    this.type = config.type;
   }
-  path?:string
-  type?:FileType
-  name?:string
+  path?:string;
+  type?:FileType;
+  name?:string;
 }
 
 export class File extends FileBase implements Partial<FileConfigs> {
   constructor(config: Partial<FileConfigs>) {
-    super(config)
-    this.extName = config.name?.substring(config.name?.lastIndexOf('.'), config.name.length)
+    super(config);
+    this.extName = config.name?.substring(config.name?.lastIndexOf('.'), config.name.length);
   }
-  type = FileType.File
-  extName?: string
+  type = FileType.File;
+  extName?: string;
 }
 
 export class Dir extends FileBase implements Partial<DirConfigs> {
   constructor(config: Partial<DirConfigs>) {
-    super(config)
-    this.children = config.children ?? []
+    super(config);
+    this.children = config.children ?? [];
   }
-  type = FileType.Directory
-  children: FileBase[]
+  type = FileType.Directory;
+  children: FileBase[];
 }

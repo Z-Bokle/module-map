@@ -24,7 +24,7 @@ export const doAnalyse = () => {
           });
         })
         .then(() => {
-          console.log(modules);
+          // console.log(modules);
           console.log(build(modules));
         });
     }
